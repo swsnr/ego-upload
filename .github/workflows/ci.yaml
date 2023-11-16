@@ -13,3 +13,19 @@ jobs:
       - run: deno check *.ts
       - run: deno lint *.ts
       - run: deno fmt --check
+
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v1
+        with:
+          deno-version: vx.x.x
+      - run: deno compile --allow-env=EGO_USERNAME,EGO_PASSWORD --allow-net=extensions.gnome.org ego-upload.ts
+      - run: b2sum ego-upload > B2SUMS.txt
+      - uses: actions/upload-artifact@v3
+        with:
+          name: binary
+          path: |
+            ego-upload
+            B2SUMS.txt
