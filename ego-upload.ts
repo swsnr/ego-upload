@@ -18,11 +18,25 @@ import { wrapFetch } from "https://deno.land/x/another_cookiejar@v5.0.3/mod.ts";
 // Wrap fetch with a global cookie JAR, for dead simple authentication.
 const fetch = wrapFetch();
 
+/** User authentication for EGO. */
 interface Auth {
   readonly username: string;
   readonly password: string;
 }
 
+/**
+ * Find all input fields from a form.
+ *
+ * Retrieve the body from `url`, and look for a form with the given `action`.
+ * Then collect a form data object with all `input`s within this form which have
+ * a name _and_ a value.
+ *
+ * Use this to extract CSRF tokens from forms.
+ *
+ * @param url The URL to retrieve the form from
+ * @param action The `action` to look for to identify the form.
+ * @returns Form data extracted from `url`
+ */
 const extractFormData = async (
   url: string,
   action: string
@@ -64,7 +78,7 @@ const extractFormData = async (
  * This does not return anything; instead it updates the global cookie JAR with
  * the authenticated session cookie.
  *
- * @param auth The authentication
+ * @param auth The authentication to use
  */
 const login = async (auth: Auth) => {
   const formData = await extractFormData(
@@ -93,6 +107,12 @@ const login = async (auth: Auth) => {
   }
 };
 
+/**
+ * Prompt for any missing part in the given authentication.
+ *
+ * @param auth Partial authentication information
+ * @returns Full authentication information with values supplied by the user as needed.
+ */
 const promptForMissingAuth = async (auth: Partial<Auth>): Promise<Auth> => {
   const username = auth.username ?? (await Input.prompt("Your e.g.o username"));
   const password =
@@ -100,6 +120,9 @@ const promptForMissingAuth = async (auth: Partial<Auth>): Promise<Auth> => {
   return { username, password };
 };
 
+/**
+ * Main entry point
+ */
 const main = async () => {
   const args = await new Command()
     .name("ego-upload")
