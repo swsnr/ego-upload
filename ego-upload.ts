@@ -11,7 +11,10 @@ import {
   Input,
   Secret,
 } from "https://deno.land/x/cliffy@v1.0.0-rc.3/prompt/mod.ts";
-import { Command } from "https://deno.land/x/cliffy@v1.0.0-rc.3/command/mod.ts";
+import {
+  Command,
+  CompletionsCommand,
+} from "https://deno.land/x/cliffy@v1.0.0-rc.3/command/mod.ts";
 import {
   DOMParser,
   Element,
@@ -247,11 +250,8 @@ const promptForMissingAuth = async (auth: Partial<Auth>): Promise<Auth> => {
 /**
  * Main entry point
  */
-const main = async () => {
-  const {
-    options,
-    args: [zipPath],
-  } = await new Command()
+const main = async () =>
+  await new Command()
     .name("ego-upload")
     .version("1")
     .description("Upload GNOME extensions to extensions.gnome.org")
@@ -263,41 +263,42 @@ const main = async () => {
       prefix: "EGO_",
     })
     .option("-u, --username <username:string>", "Your e.g.o username")
-    .parse(Deno.args);
-
-  if (extname(zipPath) !== ".zip") {
-    throw new Error(`${zipPath} does not appear to be a zip file`);
-  }
-  const readZipPermission = await Deno.permissions.request({
-    name: "read",
-    path: zipPath,
-  });
-  if (readZipPermission.state !== "granted") {
-    throw new Error(`Read permission to ${zipPath} denied`);
-  }
-  const auth = await promptForMissingAuth({
-    username: options.username,
-    password: options.password,
-  });
-  try {
-    await login(auth);
-    const reviewUrl = await upload(zipPath);
-    console.log(
-      `Successfully uploaded, please find the review at ${reviewUrl}`,
-    );
-  } catch (error) {
-    if (error instanceof InvalidUploadError) {
-      console.error("Upload failed; reasons:");
-      for (const msg of error.errors) {
-        console.error(`  - ${msg}`);
+    .action(async (options, zipPath) => {
+      if (extname(zipPath) !== ".zip") {
+        throw new Error(`${zipPath} does not appear to be a zip file`);
       }
-    } else {
-      throw error;
-    }
-  } finally {
-    await logout();
-  }
-};
+      const readZipPermission = await Deno.permissions.request({
+        name: "read",
+        path: zipPath,
+      });
+      if (readZipPermission.state !== "granted") {
+        throw new Error(`Read permission to ${zipPath} denied`);
+      }
+      const auth = await promptForMissingAuth({
+        username: options.username,
+        password: options.password,
+      });
+      try {
+        await login(auth);
+        const reviewUrl = await upload(zipPath);
+        console.log(
+          `Successfully uploaded, please find the review at ${reviewUrl}`,
+        );
+      } catch (error) {
+        if (error instanceof InvalidUploadError) {
+          console.error("Upload failed; reasons:");
+          for (const msg of error.errors) {
+            console.error(`  - ${msg}`);
+          }
+        } else {
+          throw error;
+        }
+      } finally {
+        await logout();
+      }
+    })
+    .command("completions", new CompletionsCommand())
+    .parse(Deno.args);
 
 if (import.meta.main) {
   main();
