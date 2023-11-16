@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run
+#!/usr/bin/env -S deno run --allow-env
 
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,55 +7,8 @@
 import {
   Secret,
   Input,
-  prompt,
 } from "https://deno.land/x/cliffy@v1.0.0-rc.3/prompt/mod.ts";
-import { parse, Args } from "https://deno.land/std@0.206.0/flags/mod.ts";
-
-// TODO: Replace with cliffy
-const parseArgs = (): Args => {
-  const flags = parse(Deno.args);
-  const usage = "Usage: ego-upload ZIP-FILE";
-  const help = `Upload GNOME extensions to extensions.gnome.org
-
-${usage}
-
-Arguments:
-    [ZIP-FILE]      The ZIP file to upload
-
-Options:
-    --help          Show this help and exit.`;
-
-  if (flags.help) {
-    console.log(help);
-    Deno.exit(0);
-  }
-
-  const knownFlags = ["help"];
-  for (const prop of Object.getOwnPropertyNames(flags)) {
-    if (prop === "_") {
-      continue;
-    }
-
-    if (!knownFlags.includes(prop)) {
-      console.error(`error: unexpected argument '--${prop}'
-
-${usage}
-
-For more inforation, try '--help'.`);
-      Deno.exit(1);
-    }
-  }
-
-  if (!(flags["_"] instanceof Array && 0 < flags["_"].length)) {
-    console.error(`error: missing ZIP-FILE argument
-
-${usage}
-
-For more inforation, try '--help'.`);
-    Deno.exit(1);
-  }
-  return flags;
-};
+import { Command } from "https://deno.land/x/cliffy@v1.0.0-rc.3/command/mod.ts";
 
 interface Auth {
   readonly username: string;
@@ -64,26 +17,31 @@ interface Auth {
 
 const login = async (auth: Auth) => {};
 
-const askAuth = async (): Promise<Auth> => {
-  return await prompt([
-    {
-      name: "username",
-      message: "Your e.g.o username",
-      type: Input,
-    },
-    {
-      name: "password",
-      message: "Your e.g.o password",
-      type: Secret,
-    },
-  ]);
+const promptForMissingAuth = async (auth: Partial<Auth>): Promise<Auth> => {
+  const username = auth.username ?? (await Input.prompt("Your e.g.o username"));
+  const password =
+    auth.password ?? (await Secret.prompt(`e.g.o password for ${username}`));
+  return { username, password };
 };
 
 const main = async () => {
-  const args = parseArgs();
-  const [file] = args._;
-  const auth = await askAuth();
-  console.dir(file);
+  const args = await new Command()
+    .name("ego-upload")
+    .version("1")
+    .description("Upload GNOME extensions to extensions.gnome.org")
+    .arguments("<zip-file:file>")
+    .env("EGO_USERNAME=<username:string>", "Your e.g.o username", {
+      prefix: "EGO_",
+    })
+    .env("EGO_PASSWORD=<password:string>", "Your e.g.o password", {
+      prefix: "EGO_",
+    })
+    .option("-u, --username <username:string>", "Your e.g.o username")
+    .parse(Deno.args);
+  const auth = await promptForMissingAuth({
+    username: args.options.username,
+    password: args.options.password,
+  });
   console.dir(auth);
 };
 
