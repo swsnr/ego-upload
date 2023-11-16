@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-env=EGO_USERNAME,EGO_PASSWORD --allow-net=extensions.gnome.org
+#!/usr/bin/env -S deno run --ext ts --allow-env=EGO_USERNAME,EGO_PASSWORD --allow-net=extensions.gnome.org
 
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
