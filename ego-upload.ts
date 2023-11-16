@@ -21,6 +21,8 @@ import {
 } from "https://deno.land/x/deno_dom@v0.1.43/deno-dom-wasm.ts";
 import { wrapFetch } from "https://deno.land/x/another_cookiejar@v5.0.3/mod.ts";
 
+const VERSION = "1";
+
 // Wrap fetch with a global cookie JAR, for dead simple authentication.
 const fetch = wrapFetch();
 
@@ -253,7 +255,7 @@ const promptForMissingAuth = async (auth: Partial<Auth>): Promise<Auth> => {
 const main = async () =>
   await new Command()
     .name("ego-upload")
-    .version("1")
+    .version(VERSION)
     .description("Upload GNOME extensions to extensions.gnome.org")
     .arguments("<zip-file:file>")
     .env("EGO_USERNAME=<username:string>", "Your e.g.o username", {
