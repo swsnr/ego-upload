@@ -21,7 +21,7 @@ import {
 } from "https://deno.land/x/deno_dom@v0.1.43/deno-dom-wasm.ts";
 import { wrapFetch } from "https://deno.land/x/another_cookiejar@v5.0.3/mod.ts";
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 
 // Wrap fetch with a global cookie JAR, for dead simple authentication.
 const fetch = wrapFetch();
