@@ -184,16 +184,32 @@ const logout = async () => {
   }
 };
 
+const confirmationFields = ["shell_license_compliant", "tos_compliant"];
+
+const promptForConfirmation = async (
+  fields: readonly FormInput[],
+): Promise<Map<string, string>> => {
+  const confirmedTexts = new Map();
+  for (const field of fields) {
+    if (confirmationFields.includes(field.name) && field.label) {
+      if (await Confirm.prompt(field.label)) {
+        confirmedTexts.set(field.name, field.label);
+      }
+    }
+  }
+  return confirmedTexts;
+};
+
 const confirmedUploadForm = async (uploadForm: Element): Promise<FormData> => {
   const fields = getInputFields(uploadForm);
   const formData = toFormData(fields);
-  const confirmations = ["shell_license_compliant", "tos_compliant"];
+  const confirmedTexts = await promptForConfirmation(fields);
   for (const field of fields) {
-    if (confirmations.includes(field.name)) {
-      const prompt = field.label ?? `Confirm form field ${field.name}?`;
-      if (await Confirm.prompt(prompt)) {
-        formData.append(field.name, "on");
-      }
+    if (
+      confirmedTexts.has(field.name) &&
+      confirmedTexts.get(field.name) == field.label
+    ) {
+      formData.append(name, "on");
     }
   }
   return formData;
@@ -205,8 +221,9 @@ class InvalidUploadError extends Error {
   }
 }
 
+const uploadUrl = "https://extensions.gnome.org/upload/";
+
 const upload = async (path: string): Promise<string> => {
-  const uploadUrl = "https://extensions.gnome.org/upload/";
   const uploadForm = await getFormFromUrl(uploadUrl);
   const confirmedForm = await confirmedUploadForm(uploadForm);
   const dataBlob = new Blob([await Deno.readFile(path)], {
@@ -258,13 +275,13 @@ const main = async () =>
     .version(VERSION)
     .description("Upload GNOME extensions to extensions.gnome.org")
     .arguments("<zip-file:file>")
-    .env("EGO_USERNAME=<username:string>", "Your e.g.o username", {
+    .globalEnv("EGO_USERNAME=<username:string>", "Your e.g.o username", {
       prefix: "EGO_",
     })
-    .env("EGO_PASSWORD=<password:string>", "Your e.g.o password", {
+    .globalEnv("EGO_PASSWORD=<password:string>", "Your e.g.o password", {
       prefix: "EGO_",
     })
-    .option("-u, --username <username:string>", "Your e.g.o username")
+    .globalOption("-u, --username <username:string>", "Your e.g.o username")
     .action(async (options, zipPath) => {
       if (extname(zipPath) !== ".zip") {
         throw new Error(`${zipPath} does not appear to be a zip file`);
@@ -300,6 +317,35 @@ const main = async () =>
       }
     })
     .command("completions", new CompletionsCommand())
+    .command("confirm-upload", "Confirm upload prompts ahead of time")
+    .arguments("<target-file:file>")
+    .action(async (options, targetFile) => {
+      const auth = await promptForMissingAuth({
+        username: options.username,
+        password: options.password,
+      });
+      try {
+        const writePermission = await Deno.permissions.request({
+          name: "write",
+          path: targetFile,
+        });
+        if (writePermission.state !== "granted") {
+          throw new Error(`Write permission to ${targetFile} denied`);
+        }
+        await login(auth);
+        const fields = getInputFields(await getFormFromUrl(uploadUrl));
+        const confirmedTexts = await promptForConfirmation(fields);
+        const encoder = new TextEncoder();
+        await Deno.writeFile(
+          targetFile,
+          encoder.encode(
+            JSON.stringify(Object.fromEntries(confirmedTexts), undefined, 2),
+          ),
+        );
+      } finally {
+        await logout();
+      }
+    })
     .parse(Deno.args);
 
 if (import.meta.main) {
