@@ -17,6 +17,42 @@ password respectively in the environment, to avoid the authentication prompt.
 Note that these environment variables will only work if you granted the relevant
 permissions (see below).
 
+### Github workflow
+
+```yaml
+on:
+  # Only run on tags
+  push:
+    tags: ["v*"]
+jobs:
+  upload-ego:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Build the extension here
+      - run: gnome-extensions pack […]
+      # Setup deno as required by ego-upload
+      - uses: denoland/setup-deno@v1
+        with:
+          deno-version: vx.x.x
+      # Run the upload script.  To confirm the upload license and ToS prompts
+      # non-interactively, generate the ".ego-confirmation.json" referenced
+      # below with "ego-upload confirm-upload", and commit it to the repo.
+      - run: |
+          deno run \
+            --allow-read \
+            --allow-env=EGO_USERNAME,EGO_PASSWORD \
+            --allow-net=extensions.gnome.org \
+            https://raw.githubusercontent.com/swsnr/ego-upload/v1.1.0/ego-upload.ts \
+            -c ./.ego-confirmation.json \
+            my-extension@example.com.shell-extension.zip
+        env:
+          # Pass the username and password as environment variables.
+          # You need to configure these secrets in the repository settings.
+          EGO_USERNAME: ${{ secrets.EGO_USERNAME }}
+          EGO_PASSWORD: ${{ secrets.EGO_PASSWORD }}
+```
+
 ## Installation
 
 Install [Deno] and run the following, where `ZIP_FILE` is the path to the ZIP
