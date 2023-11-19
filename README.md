@@ -38,7 +38,8 @@ jobs:
       # Run the upload script.  To confirm the upload license and ToS prompts
       # non-interactively, generate the ".ego-confirmation.json" referenced
       # below with "ego-upload confirm-upload", and commit it to the repo.
-      - run: |
+      - name: "deno-upload my-extension@example.com.shell-extension.zip"
+        run: |
           deno run \
             --allow-read \
             --allow-env=EGO_USERNAME,EGO_PASSWORD \
