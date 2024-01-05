@@ -15,207 +15,84 @@ import {
   Command,
   CompletionsCommand,
 } from "https://deno.land/x/cliffy@v1.0.0-rc.3/command/mod.ts";
-import {
-  DOMParser,
-  Element,
-} from "https://deno.land/x/deno_dom@v0.1.43/deno-dom-wasm.ts";
-import { wrapFetch } from "https://deno.land/x/another_cookiejar@v5.0.3/mod.ts";
 
 const VERSION = "1.1.0";
 
-// Wrap fetch with a global cookie JAR, for dead simple authentication.
-const fetch = wrapFetch();
-
 /** User authentication for EGO. */
-interface Auth {
+interface UserAuthentication {
   readonly username: string;
   readonly password: string;
 }
 
-/**
- * Parse a form from HTML.
- *
- * @param html The HTML containing the form.
- * @param action The form action to identify the form by
- * @returns The form element.
- */
-const getFormFromHtml = (html: string, action?: string): Element => {
-  const document = new DOMParser().parseFromString(html, "text/html");
-  const forms = Array.from(document?.getElementsByTagName("form") ?? []);
-  const form = forms.find((n) => {
-    const formAction = n.attributes.getNamedItem("action")?.value ?? "";
-    return formAction === (action ?? "");
-  });
-  if (typeof form === "undefined") {
-    throw new Error(`Required form with action ${action} not found!`);
-  }
-  return form;
-};
-
-/**
- * Retrieve a form from an URL.
- *
- * @param url The URL to get the form from.
- * @param action The form action to identify the form by
- * @returns The form element.
- */
-const getFormFromUrl = async (
-  url: string,
-  action?: string,
-): Promise<Element> => {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(
-      `Request to  ${url} failed with status code ${response.status}`,
-    );
-  }
-  return getFormFromHtml(await response.text(), action);
-};
-
-/**
- * Abstract representation of a form input.
- */
-interface FormInput {
-  readonly name: string;
-  readonly id?: string;
-  readonly label?: string;
-  readonly value?: string;
+interface APIDetailResponse {
+  readonly detail?: string;
 }
 
-/**
- * Extract all input fields from a given form.
- *
- * @param form The form to look in
- * @returns An abstract representation of all input fields
- */
-const getInputFields = (form: Element): FormInput[] =>
-  Array.from(form?.getElementsByTagName("input") ?? [])
-    .map((input): Partial<FormInput> => {
-      const name = input.attributes.getNamedItem("name")?.value;
-      const id = input.attributes.getNamedItem("id")?.value;
-      const value = input.attributes.getNamedItem("value")?.value;
-      return { name, id, value };
-    })
-    .filter((input): input is FormInput => typeof input.name === "string")
-    .map((input): FormInput => {
-      if (input.id) {
-        const label = form.querySelector(`label[for="${input.id}"]`);
-        if (label) {
-          return { label: label.innerText.trim(), ...input };
-        }
-      }
-      return input;
-    });
+interface APIToken {
+  readonly token: string;
+}
 
-/**
- * Convert input fields with value to form data.
- */
-const toFormData = (inputFields: readonly FormInput[]): FormData => {
-  const formData = new FormData();
-  for (const inputField of inputFields) {
-    if (inputField.value) {
-      formData.append(inputField.name, inputField.value);
-    }
-  }
-  return formData;
-};
-
-/**
- * Find all input fields from a form.
- *
- * Retrieve the body from `url`, and look for a form with the given `action`.
- * Then collect a form data object with all `input`s within this form which have
- * a name _and_ a value.
- *
- * Use this to extract CSRF tokens from forms.
- *
- * @param url The URL to retrieve the form from
- * @param action The `action` to look for to identify the form.
- * @returns Form data extracted from `url`
- */
-const extractFormData = async (
-  url: string,
-  action?: string,
-): Promise<FormData> =>
-  toFormData(getInputFields(await getFormFromUrl(url, action)));
+interface APITokenResponse extends APIDetailResponse {
+  readonly token: APIToken;
+}
 
 /**
  * Login with the given authentication data.
  *
- * This does not return anything; instead it updates the global cookie JAR with
- * the authenticated session cookie.
- *
  * @param auth The authentication to use
+ * @return The authentication token to use for further API requests
  */
-const login = async (auth: Auth) => {
-  const formData = await extractFormData(
-    "https://extensions.gnome.org/",
-    "/accounts/login/",
-  );
-  formData.append("username", auth.username);
-  formData.append("password", auth.password);
-  const loginResponse = await fetch(
-    "https://extensions.gnome.org/accounts/login/",
+const login = async (auth: UserAuthentication): Promise<string> => {
+  const response = await fetch(
+    "https://extensions.gnome.org/api/v1/accounts/login/",
     {
       method: "POST",
-      body: formData,
       headers: {
-        // CRSF validation by EGO requires that we set the referrer to this value.
-        Referer: "https://extensions.gnome.org/",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
       },
+      body: JSON.stringify({
+        login: auth.username,
+        password: auth.password,
+      }),
     },
   );
 
-  if (!loginResponse.ok) {
-    console.error(await loginResponse.text());
-    throw new Error(`Login failed with status ${loginResponse.status}`);
+  const data = await response.json() as APIDetailResponse;
+  if (!response.ok) {
+    throw new Error(
+      `Login failed with status ${response.status}: ${data.detail}`,
+    );
+  } else {
+    return (data as APITokenResponse).token.token;
   }
 };
 
-const logout = async () => {
-  const logoutResponse = await fetch(
-    "https://extensions.gnome.org/accounts/logout/",
+const authorizationHeader = (token: string): Record<string, string> => ({
+  "Authorization": `Token ${token}`,
+});
+
+const logout = async (token: string) => {
+  const response = await fetch(
+    "https://extensions.gnome.org/api/v1/accounts/logout/",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        ...authorizationHeader(token),
+      },
+      body: JSON.stringify({
+        revoke_token: true,
+      }),
+    },
   );
-  if (!logoutResponse.ok) {
+  const data = response.json() as APIDetailResponse;
+  if (!response.ok) {
     console.error(
-      `Logout failed ${logoutResponse.status}`,
-      await logoutResponse.text(),
+      `Logout failed with status ${response.status}: ${data.detail}`,
     );
   }
-};
-
-const confirmationFields = ["shell_license_compliant", "tos_compliant"];
-
-const promptForConfirmation = async (
-  fields: readonly FormInput[],
-): Promise<Map<string, string>> => {
-  const confirmedTexts = new Map();
-  for (const field of fields) {
-    if (confirmationFields.includes(field.name) && field.label) {
-      if (await Confirm.prompt(field.label)) {
-        confirmedTexts.set(field.name, field.label);
-      }
-    }
-  }
-  return confirmedTexts;
-};
-
-const confirmedUploadForm = async (
-  uploadForm: Element,
-  confirmations?: Map<string, string>,
-): Promise<FormData> => {
-  const fields = getInputFields(uploadForm);
-  const formData = toFormData(fields);
-  const confirmedTexts = confirmations ?? await promptForConfirmation(fields);
-  for (const field of fields) {
-    if (
-      confirmedTexts.has(field.name) &&
-      confirmedTexts.get(field.name) == field.label
-    ) {
-      formData.append(field.name, "on");
-    }
-  }
-  return formData;
 };
 
 class InvalidUploadError extends Error {
@@ -224,38 +101,174 @@ class InvalidUploadError extends Error {
   }
 }
 
-const uploadUrl = "https://extensions.gnome.org/upload/";
+interface UploadedExtension {
+  readonly extension: string;
+  readonly version: number;
+}
 
 const upload = async (
+  token: string,
   path: string,
-  confirmations?: Map<string, string>,
-): Promise<string> => {
-  const uploadForm = await getFormFromUrl(uploadUrl);
-  const confirmedForm = await confirmedUploadForm(uploadForm, confirmations);
+): Promise<UploadedExtension> => {
+  const body = new FormData();
+  body.append("shell_license_compliant", "true");
+  body.append("tos_compliant", "true");
   const dataBlob = new Blob([await Deno.readFile(path)], {
     type: "application/zip",
   });
-  confirmedForm.append("source", dataBlob, basename(path));
-  const uploadResponse = await fetch(uploadUrl, {
-    method: "POST",
-    body: confirmedForm,
+  body.append("source", dataBlob, basename(path));
+  const response = await fetch(
+    "https://extensions.gnome.org/api/v1/extensions",
+    {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        ...authorizationHeader(token),
+      },
+      body,
+    },
+  );
+  if (response.ok) {
+    return (await response.json()) as UploadedExtension;
+  } else {
+    const body = await response.text() as APIDetailResponse;
+    console.error("Upload failed, status", response.status, body);
+    throw new Error(`Upload failed with status ${response.status}`);
+  }
+};
+
+interface ExtensionMetadata {
+  readonly id: number;
+  readonly uuid: string;
+}
+
+const queryExtension = async (
+  token: string,
+  uuid: string,
+): Promise<ExtensionMetadata> => {
+  const response = await fetch(
+    `https://extensions.gnome.org/api/v1/extensions/${uuid}/`,
+    {
+      headers: {
+        "Accept": "application/json",
+        ...authorizationHeader(token),
+      },
+    },
+  );
+  if (response.ok) {
+    return (await response.json()) as ExtensionMetadata;
+  } else {
+    const body = await response.text() as APIDetailResponse;
+    console.error("Upload failed, status", response.status, body);
+    throw new Error(`Upload failed with status ${response.status}`);
+  }
+};
+
+/**
+ * Prompts the user has to confirm in order to upload an extension.
+ */
+interface ConfirmationPrompts {
+  readonly shell_license_compliant: string;
+  readonly tos_compliant: string;
+}
+
+type ConfirmedPrompt = {
+  [P in keyof ConfirmationPrompts]: boolean;
+};
+
+/**
+ * Fetch confirmation prompts.
+ *
+ * Fetch prompts the user has to confirm in order to upload an extension.
+ *
+ * @returns A map of field names to human-readable prompts to confirm.
+ */
+const fetchConfirmationPrompts = async (): Promise<ConfirmationPrompts> => {
+  // We can find the prompt texts as field titles in the API schema definition,
+  // so let's fetch the schema.
+  const response = await fetch("https://extensions.gnome.org/api/schema/", {
     headers: {
-      // CRSF validation by EGO requires that we set the referrer to this value.
-      Referer: "https://extensions.gnome.org/",
+      "Accept": "application/json",
     },
   });
+  const data = await response.json();
+  const uploadComponent = data.components.schemas.ExtensionUpload;
+  const getPrompt = (field: keyof ConfirmationPrompts): string => {
+    const prompt = uploadComponent.properties[field].title;
+    if (typeof prompt !== "string") {
+      throw new Error(`Failed to find confirmation prompt for field ${field}`);
+    }
+    return prompt;
+  };
+  return {
+    shell_license_compliant: getPrompt("shell_license_compliant"),
+    tos_compliant: getPrompt("tos_compliant"),
+  };
+};
 
-  if (uploadResponse.url === uploadUrl) {
-    const body = await uploadResponse.text();
-    // We're back at the upload form, so something didn't go right.  Let's
-    // extract what went front.
-    const form = getFormFromHtml(body);
-    const helpTexts = form
-      .getElementsByClassName("help-block")
-      .map((element) => element.innerText.trim());
-    throw new InvalidUploadError(helpTexts);
+/**
+ * Ask the user to confirm all prompts required to upload an extension.
+ *
+ * @param confirmationPrompts Prompts to confirm.
+ * @returns Whether all prompts where confirmed.
+ */
+const promptForConfirmation = async (
+  confirmationPrompts: ConfirmationPrompts,
+): Promise<boolean> => {
+  const fields: (keyof ConfirmationPrompts)[] = [
+    "shell_license_compliant",
+    "tos_compliant",
+  ];
+  for (const field of fields) {
+    if (!await Confirm.prompt(confirmationPrompts[field])) {
+      return false;
+    }
+  }
+  return true;
+};
+
+/**
+ * Load confirmed prompts from a file.
+ *
+ * @param path The path with stored confirmations.
+ * @returns A record mapping field names to confirmed prompts
+ */
+const loadConfirmations = async (
+  path: string,
+): Promise<Record<string, unknown>> => {
+  const permission = await Deno.permissions.request({ name: "read", path });
+  if (permission.state !== "granted") {
+    throw new Error(`Permission to read confirmations from ${path} denied`);
+  }
+  const contents = JSON.parse(
+    new TextDecoder().decode(await Deno.readFile(path)),
+  );
+  if (typeof contents === "object" && !Array.isArray(contents)) {
+    return contents;
   } else {
-    return uploadResponse.url;
+    console.warn("Ignoring unexpected confirmations:", contents);
+    return {};
+  }
+};
+
+/**
+ * Verify that the user has confirmed all required prompts to upload an extension.
+ *
+ * @param confirmedPrompts Pre-confirmed prompts if any
+ * @returns Whether the user has confirmed all required upload prompts, either directly or ahead of time.
+ */
+const verifyConfirmedPrompts = async (
+  confirmedPrompts: Record<string, unknown> | null,
+): Promise<boolean> => {
+  const prompts = await fetchConfirmationPrompts();
+  if (confirmedPrompts === null) {
+    return await promptForConfirmation(prompts);
+  } else {
+    const fields: (keyof ConfirmationPrompts)[] = [
+      "shell_license_compliant",
+      "tos_compliant",
+    ];
+    return fields.every((field) => confirmedPrompts[field] === prompts[field]);
   }
 };
 
@@ -265,28 +278,13 @@ const upload = async (
  * @param auth Partial authentication information
  * @returns Full authentication information with values supplied by the user as needed.
  */
-const promptForMissingAuth = async (auth: Partial<Auth>): Promise<Auth> => {
+const promptForMissingAuth = async (
+  auth: Partial<UserAuthentication>,
+): Promise<UserAuthentication> => {
   const username = auth.username ?? (await Input.prompt("Your e.g.o username"));
   const password = auth.password ??
     (await Secret.prompt(`e.g.o password for ${username}`));
   return { username, password };
-};
-
-const loadConfirmations = async (
-  path: string,
-): Promise<Map<string, string>> => {
-  const permission = await Deno.permissions.request({ name: "read", path });
-  if (permission.state !== "granted") {
-    throw new Error(`Permission to read confirmations from ${path} denied`);
-  }
-  const contents = new TextDecoder().decode(await Deno.readFile(path));
-  return JSON.parse(contents, (_, value) => {
-    if (typeof value === "object" && !(value instanceof Array)) {
-      return new Map(Object.entries(value)) as Map<string, string>;
-    } else {
-      return value;
-    }
-  }) as Map<string, string>;
 };
 
 /**
@@ -298,13 +296,13 @@ const main = async () =>
     .version(VERSION)
     .description("Upload GNOME extensions to extensions.gnome.org")
     .arguments("<zip-file:file>")
-    .globalEnv("EGO_USERNAME=<username:string>", "Your e.g.o username", {
+    .env("EGO_USERNAME=<username:string>", "Your e.g.o username", {
       prefix: "EGO_",
     })
-    .globalEnv("EGO_PASSWORD=<password:string>", "Your e.g.o password", {
+    .env("EGO_PASSWORD=<password:string>", "Your e.g.o password", {
       prefix: "EGO_",
     })
-    .globalOption("-u, --username <username:string>", "Your e.g.o username")
+    .option("-u, --username <username:string>", "Your e.g.o username")
     .option(
       "-c, --confirmations <file:file>",
       "A file with confirmations to the EGO upload prompts, as generated by 'confirm-upload'",
@@ -320,18 +318,27 @@ const main = async () =>
       if (readZipPermission.state !== "granted") {
         throw new Error(`Read permission to ${zipPath} denied`);
       }
-      const confirmations = options.confirmations
+      const preconfirmedPrompts = options.confirmations
         ? await loadConfirmations(options.confirmations)
-        : undefined;
+        : null;
+      if (!await verifyConfirmedPrompts(preconfirmedPrompts)) {
+        console.error(
+          "You must confirm the license terms and terms of service to upload an extension!",
+        );
+        Deno.exit(1);
+      }
+
       const auth = await promptForMissingAuth({
         username: options.username,
         password: options.password,
       });
+      const token = await login(auth);
       try {
-        await login(auth);
-        const reviewUrl = await upload(zipPath, confirmations);
+        const { version, extension: uuid } = await upload(token, zipPath);
+        const { id } = await queryExtension(token, uuid);
+        const extensionUrl = `https://extensions.gnome.org/extension/${id}/`;
         console.log(
-          `Successfully uploaded, please find the review at ${reviewUrl}`,
+          `Successfully uploaded extension ${uuid} version ${version}, please find it at ${extensionUrl}`,
         );
       } catch (error) {
         if (error instanceof InvalidUploadError) {
@@ -343,37 +350,24 @@ const main = async () =>
           throw error;
         }
       } finally {
-        await logout();
+        await logout(token);
       }
     })
     .command("completions", new CompletionsCommand())
     .command("confirm-upload", "Confirm upload prompts ahead of time")
     .arguments("<target-file:file>")
-    .action(async (options, targetFile) => {
-      const auth = await promptForMissingAuth({
-        username: options.username,
-        password: options.password,
-      });
-      try {
-        const writePermission = await Deno.permissions.request({
-          name: "write",
-          path: targetFile,
-        });
-        if (writePermission.state !== "granted") {
-          throw new Error(`Write permission to ${targetFile} denied`);
-        }
-        await login(auth);
-        const fields = getInputFields(await getFormFromUrl(uploadUrl));
-        const confirmedTexts = await promptForConfirmation(fields);
-        const encoder = new TextEncoder();
-        await Deno.writeFile(
+    .action(async (_, targetFile) => {
+      const prompts = await fetchConfirmationPrompts();
+      if (await promptForConfirmation(prompts)) {
+        Deno.writeTextFile(
           targetFile,
-          encoder.encode(
-            JSON.stringify(Object.fromEntries(confirmedTexts), undefined, 2),
-          ),
+          JSON.stringify(prompts, undefined, 2) + "\n",
         );
-      } finally {
-        await logout();
+      } else {
+        console.error(
+          "You must accept the license terms and the terms of service",
+        );
+        Deno.exit(1);
       }
     })
     .parse(Deno.args);
