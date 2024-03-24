@@ -16,7 +16,7 @@ import {
   CompletionsCommand,
 } from "https://deno.land/x/cliffy@v1.0.0-rc.3/command/mod.ts";
 
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 
 /** User authentication for EGO. */
 interface UserAuthentication {
