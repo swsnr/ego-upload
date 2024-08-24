@@ -6,7 +6,7 @@
 
 import { basename, extname } from "jsr:@std/path@1";
 
-import { Confirm Input, Secret } from "jsr:@cliffy/prompt@1.0.0-rc.5";
+import { Confirm, Input, Secret } from "jsr:@cliffy/prompt@1.0.0-rc.5";
 import { Command } from "jsr:@cliffy/command@1.0.0-rc.5";
 import { CompletionsCommand } from "jsr:@cliffy/command@1.0.0-rc.5/completions";
 
