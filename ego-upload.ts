@@ -14,7 +14,7 @@ import {
 import {
   Command,
   CompletionsCommand,
-} from "jsr:@cliffy/command@v1.0.0-rc.5";
+} from "jsr:@cliffy/command@1.0.0-rc.5";
 
 const VERSION = "1.2.0";
 
