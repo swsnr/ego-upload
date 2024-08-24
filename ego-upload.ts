@@ -4,17 +4,17 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import { basename, extname } from "jsr:std/path@1";
+import { basename, extname } from "jsr:@std/path@1";
 
 import {
   Confirm,
   Input,
   Secret,
-} from "jsr:cliffy/prompt@1.0.0-rc.5";
+} from "jsr:@cliffy/prompt@1.0.0-rc.5";
 import {
   Command,
   CompletionsCommand,
-} from "jsr:cliffy/command@v1.0.0-rc.5";
+} from "jsr:@cliffy/command@v1.0.0-rc.5";
 
 const VERSION = "1.2.0";
 
