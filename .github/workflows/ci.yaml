@@ -23,7 +23,7 @@ jobs:
           deno-version: vx.x.x
       - run: deno compile --allow-env=EGO_USERNAME,EGO_PASSWORD --allow-net=extensions.gnome.org ego-upload.ts
       - run: b2sum ego-upload > B2SUMS.txt
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: binary
           path: |
@@ -36,11 +36,11 @@ jobs:
     # Only create a release on a tag
     if: ${{ startsWith(github.ref, 'refs/tags/') }}
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           path: binary
           name: binary
-      - uses: softprops/action-gh-release@v1
+      - uses: softprops/action-gh-release@v2
         with:
           files: "binary/*"
         env:
