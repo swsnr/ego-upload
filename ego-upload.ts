@@ -12,6 +12,47 @@ import { CompletionsCommand } from "jsr:@cliffy/command@1.0.0-rc.5/completions";
 
 const VERSION = "1.2.0";
 
+/**
+ * An error returned by the API.
+ */
+class APIStatusError extends Error {
+  constructor(
+    /**
+     * The status code returned in response to the API request.
+     */
+    readonly status: number,
+    /**
+     * The detail string returned in the response body.
+     */
+    readonly detail: APIDetailResponse,
+    options?: ErrorOptions,
+  ) {
+    super(
+      `API request failed with status ${status}: ${detail.detail}`,
+      options,
+    );
+  }
+}
+
+/**
+ * Read data from an API response.
+ *
+ * This function does not validate the shape of response data.
+ *
+ * @param response The response to read data from
+ * @tparam T The type of response data
+ * @throws APIStatusError If `response` does not have an OK status code
+ * @returns The body of `response`, decoded from JSON and cast to `T`
+ */
+const readAPIResponse = async <T>(response: Response): Promise<T> => {
+  const data = await response.json();
+  if (!response.ok) {
+    throw new APIStatusError(response.status, data as APIDetailResponse);
+  } else {
+    return data as T;
+  }
+};
+
 /** User authentication for EGO. */
 interface UserAuthentication {
   readonly username: string;
@@ -52,13 +93,10 @@ const login = async (auth: UserAuthentication): Promise<string> => {
     },
   );
 
-  const data = await response.json() as APIDetailResponse;
-  if (!response.ok) {
-    throw new Error(
-      `Login failed with status ${response.status}: ${data.detail}`,
-    );
-  } else {
-    return (data as APITokenResponse).token.token;
+  try {
+    return (await readAPIResponse<APITokenResponse>(response)).token.token;
+  } catch (cause) {
+    throw new Error("Login failed", { cause });
   }
 };
 
@@ -66,7 +104,7 @@ const authorizationHeader = (token: string): Record<string, string> => ({
   "Authorization": `Token ${token}`,
 });
 
-const logout = async (token: string) => {
+const logout = async (token: string): Promise<void> => {
   const response = await fetch(
     "https://extensions.gnome.org/api/v1/accounts/logout/",
     {
@@ -81,11 +119,10 @@ const logout = async (token: string) => {
       }),
     },
   );
-  const data = response.json() as APIDetailResponse;
-  if (!response.ok) {
-    console.error(
-      `Logout failed with status ${response.status}: ${data.detail}`,
-    );
+  try {
+    return readAPIResponse<void>(response);
+  } catch (reason) {
+    console.error("Logout failed", reason);
   }
 };
 
@@ -122,12 +159,10 @@ const upload = async (
       body,
     },
   );
-  if (response.ok) {
-    return (await response.json()) as UploadedExtension;
-  } else {
-    const body = await response.text() as APIDetailResponse;
-    console.error("Upload failed, status", response.status, body);
-    throw new Error(`Upload failed with status ${response.status}`);
+  try {
+    return readAPIResponse<UploadedExtension>(response);
+  } catch (cause) {
+    throw new Error("Upload failed", { cause });
   }
 };
 
@@ -149,12 +184,10 @@ const queryExtension = async (
       },
     },
   );
-  if (response.ok) {
-    return (await response.json()) as ExtensionMetadata;
-  } else {
-    const body = await response.text() as APIDetailResponse;
-    console.error("Upload failed, status", response.status, body);
-    throw new Error(`Upload failed with status ${response.status}`);
+  try {
+    return readAPIResponse<ExtensionMetadata>(response);
+  } catch (cause) {
+    throw new Error("Failed to query extension metadata", { cause });
   }
 };
 
