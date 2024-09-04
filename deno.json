@@ -1,22 +1,22 @@
 {
-    "lint": {
-        "rules": {
-            "include": [
-                "camelcase",
-                "eqeqeq",
-                "explicit-function-return-type",
-                "explicit-module-boundary-types",
-                "no-await-in-loop",
-                "no-boolean-literal-for-arguments",
-                "no-const-assign",
-                "no-non-null-assertion",
-                "no-throw-literal",
-                "no-undef"
-            ]
-        }
-    },
-    "compilerOptions": {
-        "noUnusedLocals": true,
-        "noUnusedParameters": true
+  "lint": {
+    "rules": {
+      "include": [
+        "camelcase",
+        "eqeqeq",
+        "explicit-function-return-type",
+        "explicit-module-boundary-types",
+        "no-await-in-loop",
+        "no-boolean-literal-for-arguments",
+        "no-const-assign",
+        "no-non-null-assertion",
+        "no-throw-literal",
+        "no-undef"
+      ]
     }
+  },
+  "compilerOptions": {
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  }
 }
