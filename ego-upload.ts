@@ -121,8 +121,8 @@ const logout = async (token: string): Promise<void> => {
   );
   try {
     return readAPIResponse<void>(response);
-  } catch (reason) {
-    console.error("Logout failed", reason);
+  } catch (cause) {
+    throw new Error("Logout failed", { cause });
   }
 };
 
@@ -195,13 +195,11 @@ const queryExtension = async (
  * Prompts the user has to confirm in order to upload an extension.
  */
 interface ConfirmationPrompts {
+  // deno-lint-ignore camelcase -- External entity with given names
   readonly shell_license_compliant: string;
+  // deno-lint-ignore camelcase -- External entity with given names
   readonly tos_compliant: string;
 }
-
-type ConfirmedPrompt = {
-  [P in keyof ConfirmationPrompts]: boolean;
-};
 
 /**
  * Fetch confirmation prompts.
@@ -247,6 +245,7 @@ const promptForConfirmation = async (
     "tos_compliant",
   ];
   for (const field of fields) {
+    // deno-lint-ignore no-await-in-loop -- We deliberately show one prompt after another
     if (!await Confirm.prompt(confirmationPrompts[field])) {
       return false;
     }
