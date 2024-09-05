@@ -10,7 +10,7 @@ import { Confirm, Input, Secret } from "jsr:@cliffy/prompt@1.0.0-rc.5";
 import { Command } from "jsr:@cliffy/command@1.0.0-rc.5";
 import { CompletionsCommand } from "jsr:@cliffy/command@1.0.0-rc.5/completions";
 
-const VERSION = "1.2.0";
+const VERSION = "1.2.1";
 
 /**
  * An error returned by the API.
