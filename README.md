@@ -1,3 +1,5 @@
+Obsolete, use <https://github.com/swsnr/gsebuild> instead.  I no longer maintain this tool.
+
 # ego-upload
 
 Upload GNOME extensions to <https://extensions.gnome.org> from the command line.
